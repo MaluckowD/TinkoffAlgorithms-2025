@@ -2,21 +2,35 @@ class Stack:
     def __init__(self):
         self.items = []
     
+    def is_empty(self):
+        return len(self.items) == 0
+    
     def push(self, item):
-        if len(self.items) == 0:
+        if self.is_empty():
             self.items.append((item, item))
         else:
             self.items.append((item, min(self.items[-1][1], item)))
     
     def pop(self):
-        if len(self.items) == 0:
+        if self.is_empty():
             return None
         return self.items.pop()
     
     def top(self):
-        if len(self.items) == 0:
+        if self.is_empty() == 0:
             return None
-        return self.items[-1]
+        return self.items[-1][0]
+    
+    def size(self):
+        return len(self.items)
+    
+    def clear(self):
+        self.items = []
+    
+    def get_min(self):
+        if self.is_empty():
+            return None
+        return self.items[-1][1]
 
 n = int(input())
 stack = Stack()
@@ -28,5 +42,5 @@ for i in range(n):
     elif inp[0] == "2":
         stack.pop()
     elif inp[0] == "3":
-        x, mn = stack.top()
+        mn = stack.get_min()
         print(mn)
