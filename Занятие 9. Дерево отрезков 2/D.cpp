@@ -1,142 +1,136 @@
 #include <iostream>
 #include <vector>
-#include <climits>
 #include <algorithm>
+#include <climits>
 
 using namespace std;
 
 struct Event {
     int x;
+    int type; 
     int y1, y2;
-    bool is_start;
-};
 
-struct Node {
-    int max_val;
-    int max_pos;
-    int add;
-};
-
-bool compareEvents(const Event& a, const Event& b) {
-    return (a.x < b.x) || (a.x == b.x && a.is_start && !b.is_start);
-}
-
-class SegmentTree {
-private:
-    vector<Node> tree;
-    int size;
-    int offset;
-    
-    void push(int v, int l, int r) {
-        if (tree[v].add == 0) return;
-        
-        tree[v].max_val += tree[v].add;
-        
-        if (l != r) {
-            tree[2*v+1].add += tree[v].add;
-            tree[2*v+2].add += tree[v].add;
-        }
-        
-        tree[v].add = 0;
+    bool operator<(const Event& other) const {
+        if (x != other.x) return x < other.x;
+        return type > other.type;
     }
-    
-    void update(int v, int l, int r, int ql, int qr, int val) {
-        push(v, l, r);
-        
-        if (qr < l || r < ql) return;
-        
-        if (ql <= l && r <= qr) {
-            tree[v].add += val;
-            push(v, l, r);
+};
+
+struct SegmentTree {
+    int size;
+    vector<int> tree;
+    vector<int> lazy;
+    vector<int> pos;
+
+    void init(int n) {
+        size = 1;
+        while (size < n) size *= 2;
+        tree.assign(2 * size, 0);
+        lazy.assign(2 * size, 0);
+        pos.assign(2 * size, 0);
+        for (int i = 0; i < size; ++i) pos[size + i] = i;
+        for (int i = size - 1; i > 0; --i) pos[i] = pos[2 * i];
+    }
+
+    void push(int node, int l, int r) {
+        if (lazy[node] == 0) return;
+        tree[node] += lazy[node];
+        if (l != r) {
+            lazy[2 * node] += lazy[node];
+            lazy[2 * node + 1] += lazy[node];
+        }
+        lazy[node] = 0;
+    }
+
+    void range_add(int l, int r, int val, int node, int lx, int rx) {
+        push(node, lx, rx);
+        if (r < lx || l > rx) return;
+        if (l <= lx && rx <= r) {
+            lazy[node] += val;
+            push(node, lx, rx);
             return;
         }
-        
-        int mid = (l + r) / 2;
-        update(2*v+1, l, mid, ql, qr, val);
-        update(2*v+2, mid+1, r, ql, qr, val);
-        
-        if (tree[2*v+1].max_val >= tree[2*v+2].max_val) {
-            tree[v].max_val = tree[2*v+1].max_val;
-            tree[v].max_pos = tree[2*v+1].max_pos;
+        int mid = (lx + rx) / 2;
+        range_add(l, r, val, 2 * node, lx, mid);
+        range_add(l, r, val, 2 * node + 1, mid + 1, rx);
+        if (tree[2 * node] >= tree[2 * node + 1]) {
+            tree[node] = tree[2 * node];
+            pos[node] = pos[2 * node];
         } else {
-            tree[v].max_val = tree[2*v+2].max_val;
-            tree[v].max_pos = tree[2*v+2].max_pos;
+            tree[node] = tree[2 * node + 1];
+            pos[node] = pos[2 * node + 1];
         }
     }
-    
-public:
-    SegmentTree(int min_y, int max_y) {
-        offset = -min_y;
-        size = 1;
-        int range = max_y - min_y + 1;
-        while (size < range) size <<= 1;
-        tree.resize(2*size);
-        
-        for (int i = 0; i < size; ++i) {
-            tree[size-1+i].max_pos = i;
-        }
-        
-        for (int i = size-2; i >= 0; --i) {
-            tree[i].max_pos = tree[2*i+1].max_pos;
-        }
+
+    void range_add(int l, int r, int val) {
+        range_add(l, r, val, 1, 0, size - 1);
     }
-    
-    void add(int y1, int y2, int val) {
-        update(0, 0, size-1, y1 + offset, y2 + offset, val);
-    }
-    
+
     pair<int, int> get_max() {
-        return {tree[0].max_val, tree[0].max_pos - offset};
+        push(1, 0, size - 1);
+        return {tree[1], pos[1]};
     }
 };
 
 int main() {
-    ios_base::sync_with_stdio(false);
+    ios::sync_with_stdio(false);
     cin.tie(nullptr);
-    
+
     int n;
     cin >> n;
-    
+
     vector<Event> events;
-    int min_y = INT_MAX, max_y = INT_MIN;
-    
+    vector<int> ys;
+
     for (int i = 0; i < n; ++i) {
         int x1, y1, x2, y2;
         cin >> x1 >> y1 >> x2 >> y2;
-        
-        // Учитываем, что y увеличивается сверху вниз
-        // Поэтому y1 - верхняя координата (меньшее значение y)
-        // y2 - нижняя координата (большее значение y)
-        if (y1 > y2) swap(y1, y2);
-        
-        events.push_back({x1, y1, y2, true});  // Левая граница (начало)
-        events.push_back({x2, y1, y2, false}); // Правая граница (конец)
-        
-        min_y = min(min_y, y1);
-        max_y = max(max_y, y2);
+        if (x1 > x2) swap(x1, x2); 
+        if (y1 > y2) swap(y1, y2); 
+        events.push_back({x1, 1, y1, y2});
+        events.push_back({x2, -1, y1, y2});
+        ys.push_back(y1);
+        ys.push_back(y2);
     }
-    
-    sort(events.begin(), events.end(), compareEvents);
-    
-    SegmentTree st(min_y, max_y);
-    
-    int max_count = 0;
-    int result_x = 0, result_y = 0;
-    
-    for (const auto& e : events) {
-        st.add(e.y1, e.y2, e.is_start ? 1 : -1);
-        
-        auto current = st.get_max();
-        if (current.first > max_count) {
-            max_count = current.first;
-            result_x = e.x;
-            // Для y берем верхнюю границу (минимальное y)
-            result_y = e.y1;
+
+    sort(ys.begin(), ys.end());
+    ys.erase(unique(ys.begin(), ys.end()), ys.end());
+    auto get_compressed = [&](int y) {
+        return lower_bound(ys.begin(), ys.end(), y) - ys.begin();
+    };
+
+    sort(events.begin(), events.end());
+
+    SegmentTree st;
+    st.init(ys.size());
+
+    int global_max = 0;
+    int best_x = 0, best_y = 0;
+
+    for (const auto& event : events) {
+        int x = event.x;
+        int type = event.type;
+        int y1 = get_compressed(event.y1);
+        int y2 = get_compressed(event.y2);
+
+        auto [current_max, current_pos] = st.get_max();
+        if (current_max > global_max) {
+            global_max = current_max;
+            best_x = x;
+            best_y = ys[current_pos];
         }
+
+        st.range_add(y1, y2 - 1, type);
     }
-    
-    cout << max_count << "\n";
-    cout << result_x << " " << result_y << "\n";
-    
+
+    auto [current_max, current_pos] = st.get_max();
+    if (current_max > global_max) {
+        global_max = current_max;
+        best_y = ys[current_pos];
+    }
+
+    cout << global_max << "\n";
+    cout << best_y << " " << best_x << "\n"; 
+
     return 0;
 }

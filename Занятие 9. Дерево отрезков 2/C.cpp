@@ -1,171 +1,105 @@
 #include <iostream>
 #include <vector>
-#include <cstdint>
 
 using namespace std;
 
-int getMiddle(int l, int r) {
-    return l + (r - l) / 2;
-}
-
-
 struct Node {
-    int number;
-    int segments;
-    int set;
-    int l;
-    int r;
+    int number, segments, set, left, right;
     bool up;
 
-    Node() {
-        number = 1;
-        segments = 1;
-        set = 0;
-        up = false;
-        l = 0;
-        r = 0;
-    }
+    Node() {}
 
-    Node(int n, int seg, int s, int left, int right, bool u) {
-        number = n;
-        segments = seg;
-        set = s;
-        l = left;
-        r = right;
-        up = u;
+    Node(int _left, int _right) {
+        number = segments = 0;
+        set = up = false;
+        left = _left;
+        right = _right;
     }
 };
 
-vector <Node> t;
-vector<char> color;
-vector<int> cord;
-vector<int> delta;
-int n;
+void build(vector<Node> &tree, int v, int tl, int tr) {
+    tree[v] = Node(tl, tr);
 
-void build(int v, int tl, int tr) {
-    if (tl == tr) {
-        t[v] = Node(0, 0, 0, tl, tr, false);
-    } else {
-        int tm = getMiddle(tl, tr);
-        build(v * 2, tl, tm);
-        build(v * 2 + 1, tm + 1, tr);
-        t[v] = Node(0, 0, 0, tl, tr, false);
+    if (tl != tr) {
+        int tm = (tl + tr) / 2;
+        build(tree, v * 2, tl, tm);
+        build(tree, v * 2 + 1, tm + 1, tr);
     }
 }
 
-void push(int v) {
-    if (!t[v].up)
-        return;
+void push(vector<Node> &tree, int v) {
+    if (!tree[v].up) return;
 
-    t[v].number = t[v].set * (t[v].r - t[v].l + 1);
-    t[v].segments = 1 * t[v].set;
-    t[v].up = false;
+    tree[v].number = (tree[v].set ? (tree[v].right - tree[v].left + 1) : 0);
+    tree[v].segments = (tree[v].set ? 1 : 0);
+    tree[v].up = false;
 
-    if (t[v].l == t[v].r)
-        return;
+    if (tree[v].left == tree[v].right) return;
 
-    t[v * 2].set = t[v].set;
-    t[v * 2 + 1].set = t[v].set;
-
-    t[v * 2].up = true;
-    t[v * 2 + 1].up = true;
+    tree[v * 2].set = tree[v * 2 + 1].set = tree[v].set;
+    tree[v * 2].up = tree[v * 2 + 1].up = true;
 }
 
-bool leftisblack(int v) {
-    push(v);
+void update(vector<Node> &tree, int v, bool value, int l, int r) {
+    if (tree[v].right < l || tree[v].left > r) return;
 
-    if (t[v].l == t[v].r)
-        return t[v].number == 1;
-
-    return leftisblack(v * 2);
-}
-
-bool rightisblack(int v) {
-    push(v);
-
-    if (t[v].l == t[v].r)
-        return t[v].number == 1;
-
-    return rightisblack(v * 2 + 1);
-}
-
-void update(int v, int value, int l, int r) {
-    if (t[v].r < l || t[v].l > r)
-        return;
-
-    if (t[v].r <= r && t[v].l >= l) {
-        push(v);
-        t[v].set = value;
-        t[v].up = true;
+    if (tree[v].right <= r && tree[v].left >= l) {
+        push(tree, v);
+        tree[v].set = value;
+        tree[v].up = true;
         return;
     }
 
-    push(v);
-    update(v * 2, value, l, r);
-    update(v * 2 + 1, value, l, r);
+    push(tree, v);
+    update(tree, v * 2, value, l, r);
+    update(tree, v * 2 + 1, value, l, r);
 
-    bool left = rightisblack(v * 2);
-    bool right = leftisblack(v * 2 + 1);
-
-    t[v].number = t[v * 2].number + t[v * 2 + 1].number;
-    t[v].segments = t[v * 2 + 1].segments + t[v * 2].segments;
-
-    if (left && right) {
-        t[v].segments--;
+    int cur = v * 2;
+    while (true) {
+        push(tree, cur);
+        if (tree[cur].left == tree[cur].right) break;
+        cur = cur * 2 + 1;
     }
+    bool left = (tree[cur].number == 1);
+
+    cur = v * 2 + 1;
+    while (true) {
+        push(tree, cur);
+        if (tree[cur].left == tree[cur].right) break;
+        cur = cur * 2;
+    }
+    bool right = (tree[cur].number == 1);
+
+    tree[v].number = tree[v * 2].number + tree[v * 2 + 1].number;
+    tree[v].segments = tree[v * 2].segments + tree[v * 2 + 1].segments;
+
+    if (left && right) --tree[v].segments;
 }
 
 int main() {
-    freopen("painter.in", "r", stdin);
-    freopen("painter.out", "w", stdout);
+    ios_base::sync_with_stdio(false);
+    cin.tie(NULL);
+    cout.tie(NULL);
 
-    scanf("%d", &n);
-    color.resize((unsigned) n);
-    cord.resize((unsigned) n);
-    delta.resize((unsigned) n);
+    const int OFFSET = 500'000;
+    const int SIZE = 1'000'100;
+    vector<Node> tree(SIZE * 4);
+    build(tree, 1, 0, SIZE);
 
-    int maxdelta = 0;
-    int del;
-    int maxcord = INT32_MIN;
-    int mincord = INT32_MAX;
+    int n;
+    cin >> n;
 
-    for (int i = 0; i < n; i++) {
-        scanf("\n%c %d %d", &color[i], &cord[i], &delta[i]);
+    char color;
+    int x, l;
+    for (int req = 0; req < n; ++req) {
+        cin >> color >> x >> l;
 
-        if (delta[i] > 0) delta[i]--;
-        else delta[i]++;
-
-        del = cord[i] + delta[i];
-        if (del > maxcord) {
-            maxcord = del;
+        int start = x + OFFSET;
+        int end = start + l - 1;
+        if (l > 0) {
+            update(tree, 1, (color == 'B'), start, end);
         }
 
-        if (maxdelta > cord[i]) {
-            maxdelta = cord[i];
-        }
+        cout << tree[1].segments << ' ' << tree[1].number << endl;
     }
-
-    int length;
-    if (maxdelta < 0) {
-        length = maxcord - maxdelta + 1;
-    } else {
-        length = maxcord + 1;
-    }
-
-    t.resize((unsigned) (4 * length));
-    build(1, 0, length);
-    for (int i = 0; i < n; i++) {
-        if (color[i] == 'W') {
-            update(1, 0, cord[i] - maxdelta, cord[i] + delta[i] - maxdelta);
-            printf("%d %d\n", t[1].segments,
-                   t[1].number);
-        }
-
-        if (color[i] == 'B') {
-            update(1, 1, cord[i] - maxdelta, cord[i] + delta[i] - maxdelta);
-            printf("%d %d\n", t[1].segments,
-                   t[1].number);
-        }
-    }
-    return 0;
 }
